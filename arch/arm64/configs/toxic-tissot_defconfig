@@ -2,7 +2,7 @@
 # Automatically generated file; DO NOT EDIT.
 # Linux/arm64 3.18.102 Kernel Configuration
 #
-CONFIG_LOCALVERSION="-Intoxicated-R3"
+CONFIG_LOCALVERSION="-Intoxicated-R4"
 CONFIG_LOCALVERSION_AUTO=y
 CONFIG_CUSTOM=y
 CONFIG_ARM64=y
