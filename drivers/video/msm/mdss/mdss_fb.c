@@ -3504,6 +3504,7 @@ int mdss_fb_atomic_commit(struct fb_info *info,
 	int ret = -EPERM;
 	u32 old_xres, old_yres, old_format;
 
+	//printk("Enter %s\n", __func__);
 	if (!mfd || (!mfd->op_enable)) {
 		pr_err("mfd is NULL or operation not permitted\n");
 		return -EPERM;
@@ -5070,6 +5071,8 @@ static int mdss_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	if (!info || !info->par)
 		return -EINVAL;
 
+	//printk("linson run mdss_fb_ioctl\n");
+	
 	return mdss_fb_do_ioctl(info, cmd, arg, file);
 }
 
