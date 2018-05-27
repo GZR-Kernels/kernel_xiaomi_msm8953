@@ -2,7 +2,7 @@
 # Automatically generated file; DO NOT EDIT.
 # Linux/arm64 3.18.105 Kernel Configuration
 #
-CONFIG_LOCALVERSION="-GZR-MiA1-Intoxicated-R7"
+CONFIG_LOCALVERSION="-GZR-MiA1-Intoxicated-R8"
 # CONFIG_LOCALVERSION_AUTO is not set
 CONFIG_CUSTOM=y
 CONFIG_ARM64=y
