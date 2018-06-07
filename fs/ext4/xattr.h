@@ -124,6 +124,16 @@ static inline int ext4_write_trylock_xattr(struct inode *inode, int *save)
 	return 1;
 }
 
+/*
+ * The EXT4_STATE_NO_EXPAND is overloaded and used for two purposes.
+ * The first is to signal that there the inline xattrs and data are
+ * taking up so much space that we might as well not keep trying to
+ * expand it.  The second is that xattr_sem is taken for writing, so
+ * we shouldn't try to recurse into the inode expansion.  For this
+ * second case, we need to make sure that we take save and restore the
+ * NO_EXPAND state flag appropriately.
+ */
+
 static inline void ext4_write_unlock_xattr(struct inode *inode, int *save)
 {
 	if (*save == 0)

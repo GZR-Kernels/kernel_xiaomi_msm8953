@@ -130,6 +130,11 @@ static int f2fs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	alloc_nid_done(sbi, ino);
 
 	d_instantiate_new(dentry, inode);
+
+	if (IS_DIRSYNC(dir))
+		f2fs_sync_fs(sbi->sb, 1);
+
+	f2fs_balance_fs(sbi, true);
 	return 0;
 out:
 	handle_failed_inode(inode);
@@ -237,16 +242,40 @@ static int f2fs_symlink(struct inode *dir, struct dentry *dentry,
 {
 	struct f2fs_sb_info *sbi = F2FS_I_SB(dir);
 	struct inode *inode;
-	size_t symlen = strlen(symname) + 1;
+	size_t len = strlen(symname);
+	struct fscrypt_str disk_link = FSTR_INIT((char *)symname, len + 1);
+	struct fscrypt_symlink_data *sd = NULL;
 	int err;
 
-	f2fs_balance_fs(sbi);
+	if (unlikely(f2fs_cp_error(sbi)))
+		return -EIO;
+
+	if (f2fs_encrypted_inode(dir)) {
+		err = fscrypt_get_encryption_info(dir);
+		if (err)
+			return err;
+
+		if (!fscrypt_has_encryption_key(dir))
+			return -ENOKEY;
+
+		disk_link.len = (fscrypt_fname_encrypted_size(dir, len) +
+				sizeof(struct fscrypt_symlink_data));
+	}
+
+	if (disk_link.len > dir->i_sb->s_blocksize)
+		return -ENAMETOOLONG;
+
+	dquot_initialize(dir);
 
 	inode = f2fs_new_inode(dir, S_IFLNK | S_IRWXUGO);
 	if (IS_ERR(inode))
 		return PTR_ERR(inode);
 
-	inode->i_op = &f2fs_symlink_inode_operations;
+	if (f2fs_encrypted_inode(inode))
+		inode->i_op = &f2fs_encrypted_symlink_inode_operations;
+	else
+		inode->i_op = &f2fs_symlink_inode_operations;
+	inode_nohighmem(inode);
 	inode->i_mapping->a_ops = &f2fs_dblock_aops;
 
 	f2fs_lock_op(sbi);
@@ -254,11 +283,64 @@ static int f2fs_symlink(struct inode *dir, struct dentry *dentry,
 	if (err)
 		goto out;
 	f2fs_unlock_op(sbi);
-
-	err = page_symlink(inode, symname, symlen);
 	alloc_nid_done(sbi, inode->i_ino);
 
+	if (f2fs_encrypted_inode(inode)) {
+		struct qstr istr = QSTR_INIT(symname, len);
+		struct fscrypt_str ostr;
+
+		sd = kzalloc(disk_link.len, GFP_NOFS);
+		if (!sd) {
+			err = -ENOMEM;
+			goto err_out;
+		}
+
+		err = fscrypt_get_encryption_info(inode);
+		if (err)
+			goto err_out;
+
+		if (!fscrypt_has_encryption_key(inode)) {
+			err = -ENOKEY;
+			goto err_out;
+		}
+
+		ostr.name = sd->encrypted_path;
+		ostr.len = disk_link.len;
+		err = fscrypt_fname_usr_to_disk(inode, &istr, &ostr);
+		if (err)
+			goto err_out;
+
+		sd->len = cpu_to_le16(ostr.len);
+		disk_link.name = (char *)sd;
+	}
+
+	err = page_symlink(inode, disk_link.name, disk_link.len);
+
+err_out:
 	d_instantiate_new(dentry, inode);
+
+	/*
+	 * Let's flush symlink data in order to avoid broken symlink as much as
+	 * possible. Nevertheless, fsyncing is the best way, but there is no
+	 * way to get a file descriptor in order to flush that.
+	 *
+	 * Note that, it needs to do dir->fsync to make this recoverable.
+	 * If the symlink path is stored into inline_data, there is no
+	 * performance regression.
+	 */
+	if (!err) {
+		filemap_write_and_wait_range(inode->i_mapping, 0,
+							disk_link.len - 1);
+
+		if (IS_DIRSYNC(dir))
+			f2fs_sync_fs(sbi->sb, 1);
+	} else {
+		f2fs_unlink(dir, dentry);
+	}
+
+	kfree(sd);
+
+	f2fs_balance_fs(sbi, true);
 	return err;
 out:
 	handle_failed_inode(inode);
@@ -316,10 +398,12 @@ static int f2fs_mknod(struct inode *dir, struct dentry *dentry,
 	struct inode *inode;
 	int err = 0;
 
+	if (unlikely(f2fs_cp_error(sbi)))
+		return -EIO;
 	if (!new_valid_dev(rdev))
 		return -EINVAL;
 
-	f2fs_balance_fs(sbi);
+	dquot_initialize(dir);
 
 	inode = f2fs_new_inode(dir, mode);
 	if (IS_ERR(inode))
@@ -335,7 +419,13 @@ static int f2fs_mknod(struct inode *dir, struct dentry *dentry,
 	f2fs_unlock_op(sbi);
 
 	alloc_nid_done(sbi, inode->i_ino);
+
 	d_instantiate_new(dentry, inode);
+
+	if (IS_DIRSYNC(dir))
+		f2fs_sync_fs(sbi->sb, 1);
+
+	f2fs_balance_fs(sbi, true);
 	return 0;
 out:
 	handle_failed_inode(inode);
