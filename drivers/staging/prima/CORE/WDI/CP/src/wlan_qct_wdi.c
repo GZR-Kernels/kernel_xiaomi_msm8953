@@ -617,6 +617,7 @@ WDI_ReqProcFuncType  pfnReqProcTbl[WDI_MAX_UMAC_IND] =
   NULL,
 #endif
   WDI_process_vowifi_request,         /* WDI_SET_VOWIFI_IND */
+  WDI_process_qpower_request,         /* WDI_SET_QPOWER */
 
 };
 
@@ -1395,7 +1396,7 @@ static char *WDI_getReqMsgString(wpt_uint16 wdiReqMsgId)
  * @user_data: pointer to user data
  *
  * Return: WDI_Status
- *	WDI_STATUS_SUCCESS - success or else failure status
+ *  WDI_STATUS_SUCCESS - success or else failure status
  */
 WDI_Status
 wdi_process_dhcpserver_offload_req
@@ -1405,25 +1406,25 @@ wdi_process_dhcpserver_offload_req
  void *user_data
 )
 {
-	WDI_EventInfoType wdi_event_data;
+  WDI_EventInfoType wdi_event_data;
 
-	if ( eWLAN_PAL_FALSE == gWDIInitialized )
-	{
-		WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_ERROR,
-			   "WDI API call before module is initialized - Fail request");
-		return WDI_STATUS_E_NOT_ALLOWED;
-	}
+  if ( eWLAN_PAL_FALSE == gWDIInitialized )
+  {
+    WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_ERROR,
+         "WDI API call before module is initialized - Fail request");
+    return WDI_STATUS_E_NOT_ALLOWED;
+  }
 
-	/*-------------------------------------------------------------------
-	  Fill in Event data and post to the Main FSM
-	  -----------------------------------------------------------------*/
-	wdi_event_data.wdiRequest      = WDI_DHCP_SERVER_OFFLOAD_REQ;
-	wdi_event_data.pEventData      = dhcp_info;
-	wdi_event_data.uEventDataSize  = sizeof(*dhcp_info);
-	wdi_event_data.pCBfnc          = wdi_dhcp_srv_offload_rsp_callback;
-	wdi_event_data.pUserData       = user_data;
+  /*-------------------------------------------------------------------
+    Fill in Event data and post to the Main FSM
+    -----------------------------------------------------------------*/
+  wdi_event_data.wdiRequest      = WDI_DHCP_SERVER_OFFLOAD_REQ;
+  wdi_event_data.pEventData      = dhcp_info;
+  wdi_event_data.uEventDataSize  = sizeof(*dhcp_info);
+  wdi_event_data.pCBfnc          = wdi_dhcp_srv_offload_rsp_callback;
+  wdi_event_data.pUserData       = user_data;
 
-	return WDI_PostMainEvent(&gWDICb, WDI_REQUEST_EVENT, &wdi_event_data);
+  return WDI_PostMainEvent(&gWDICb, WDI_REQUEST_EVENT, &wdi_event_data);
 }
 #endif /* DHCP_SERVER_OFFLOAD */
 
@@ -9051,6 +9052,65 @@ WDI_process_vowifi_request(WDI_ControlBlockType* pWDICtx,
   return (wdiStatus != WDI_STATUS_SUCCESS) ? wdiStatus:WDI_STATUS_SUCCESS_SYNC;
 }
 
+WDI_Status
+WDI_process_qpower_request(WDI_ControlBlockType* pWDICtx,
+                           WDI_EventInfoType* pEventData)
+{
+  wpt_uint8* pSendBuffer = NULL;
+  wpt_uint16 usDataOffset = 0;
+  wpt_uint16 usSendSize = 0;
+  uint8_t *enable;
+  tHalQpower hal_qpower_msg;
+  WDI_Status wdiStatus;
+
+  /*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+
+  WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_INFO,
+               "%s", __func__);
+
+  /*-------------------------------------------------------------------------
+    Sanity check
+  -------------------------------------------------------------------------*/
+  if (( NULL == pEventData ) || ( NULL == pEventData->pEventData ) ) {
+      WPAL_TRACE( eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_FATAL,
+             "%s: Invalid parameters", __func__);
+      WDI_ASSERT(0);
+      return WDI_STATUS_E_FAILURE;
+  }
+  enable = (uint8_t*)pEventData->pEventData;
+
+  /*-----------------------------------------------------------------------
+    Get message buffer
+  -----------------------------------------------------------------------*/
+  if (( WDI_STATUS_SUCCESS != WDI_GetMessageBuffer( pWDICtx,
+                                     WDI_SET_QPOWER,
+                                      sizeof(tHalQpowerParams),
+                          &pSendBuffer, &usDataOffset, &usSendSize))||
+       ( usSendSize < (usDataOffset + sizeof(tHalQpowerParams) )))
+  {
+      WPAL_TRACE( eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_FATAL,
+              "Unable to get send buffer QPOWER ind %pK ",
+               pEventData);
+      WDI_ASSERT(0);
+      return WDI_STATUS_E_FAILURE;
+  }
+
+  hal_qpower_msg.qpowerParams.enable = *enable;
+
+  wpalMemoryCopy( pSendBuffer+usDataOffset,
+                  &hal_qpower_msg.qpowerParams,
+                  sizeof(hal_qpower_msg.qpowerParams));
+
+  pWDICtx->pReqStatusUserData = NULL;
+  pWDICtx->pfncRspCB = NULL;
+
+  /*-------------------------------------------------------------------------
+    Send QPOWER Request to HAL
+  -------------------------------------------------------------------------*/
+  wdiStatus =  WDI_SendIndication(pWDICtx, pSendBuffer, usSendSize);
+  return (wdiStatus != WDI_STATUS_SUCCESS) ? wdiStatus:WDI_STATUS_SUCCESS_SYNC;
+}
+
 /**
  @brief Process End Scan Request function (called when Main FSM
         allows it)
@@ -11561,6 +11621,26 @@ WDI_Status WDI_set_vowifi_mode_ind(wpt_boolean enable)
     wdiEventData.wdiRequest      = WDI_SET_VOWIFI_IND;
     wdiEventData.pEventData      = (void *) &enable;
     wdiEventData.uEventDataSize  = sizeof(wpt_boolean);
+    wdiEventData.pCBfnc          = NULL;
+    wdiEventData.pUserData       = NULL;
+
+    return WDI_PostMainEvent(&gWDICb, WDI_REQUEST_EVENT, &wdiEventData);
+}
+
+WDI_Status WDI_set_qpower(uint8_t enable)
+{
+    WDI_EventInfoType wdiEventData;
+
+    if (eWLAN_PAL_FALSE == gWDIInitialized )
+    {
+        WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_ERROR,
+                 "WDI API call before module is initialized - Fail request");
+        return WDI_STATUS_E_NOT_ALLOWED;
+    }
+
+    wdiEventData.wdiRequest      = WDI_SET_QPOWER;
+    wdiEventData.pEventData      = (void *) &enable;
+    wdiEventData.uEventDataSize  = sizeof(uint8_t);
     wdiEventData.pCBfnc          = NULL;
     wdiEventData.pUserData       = NULL;
 
@@ -25237,6 +25317,8 @@ WDI_2_HAL_REQ_TYPE
        return WLAN_HAL_SET_RTS_CTS_HTVHT_IND;
   case WDI_SET_VOWIFI_IND:
        return WLAN_HAL_VOWIFI_IND;
+    case WDI_SET_QPOWER:
+       return WLAN_HAL_QPOWER_ENABLE_BY_HOST_IND;
   case WDI_MON_START_REQ:
        return WLAN_HAL_ENABLE_MONITOR_MODE_REQ;
   case WDI_MON_STOP_REQ:
@@ -34404,7 +34486,7 @@ WDI_ProcessMonStartReq
  * @event_data: pointer to the event data
  *
  * Return: WDI_Status
- *	WDI_STATUS_SUCCESS - success or else failure status
+ *  WDI_STATUS_SUCCESS - success or else failure status
  */
 WDI_Status
 wdi_dhcp_server_offload_rsp
@@ -34413,29 +34495,29 @@ wdi_dhcp_server_offload_rsp
     WDI_EventInfoType *event_data
 )
 {
-	wdi_dhcp_srv_offload_rsp_cb wdi_dhcp_srv_offload_rsp_callback;
+  wdi_dhcp_srv_offload_rsp_cb wdi_dhcp_srv_offload_rsp_callback;
 
-	WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_INFO,
-		   "%s: Enter ", __func__);
-	/*-------------------------------------------------------------------
-	  Sanity check
-	  -----------------------------------------------------------------*/
-	if ((NULL == wdi_ctx) || (NULL == event_data) ||
-	    (NULL == event_data->pEventData))
-	{
-		WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_WARN,
-			   "%s: Invalid parameters", __func__);
-		WDI_ASSERT(0);
-		return WDI_STATUS_E_FAILURE;
-	}
+  WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_INFO,
+       "%s: Enter ", __func__);
+  /*-------------------------------------------------------------------
+    Sanity check
+    -----------------------------------------------------------------*/
+  if ((NULL == wdi_ctx) || (NULL == event_data) ||
+      (NULL == event_data->pEventData))
+  {
+    WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_WARN,
+         "%s: Invalid parameters", __func__);
+    WDI_ASSERT(0);
+    return WDI_STATUS_E_FAILURE;
+  }
 
-	wdi_dhcp_srv_offload_rsp_callback =
-		(wdi_dhcp_srv_offload_rsp_cb)wdi_ctx->pfncRspCB;
+  wdi_dhcp_srv_offload_rsp_callback =
+    (wdi_dhcp_srv_offload_rsp_cb)wdi_ctx->pfncRspCB;
 
-	wdi_dhcp_srv_offload_rsp_callback((void *) event_data->pEventData,
-					  wdi_ctx->pRspCBUserData);
+  wdi_dhcp_srv_offload_rsp_callback((void *) event_data->pEventData,
+            wdi_ctx->pRspCBUserData);
 
-	return WDI_STATUS_SUCCESS;
+  return WDI_STATUS_SUCCESS;
 }
 #endif /* DHCP_SERVER_OFFLOAD */
 
@@ -34446,7 +34528,7 @@ wdi_dhcp_server_offload_rsp
  * @event_data: pointer to the event data
  *
  * Return: WDI_Status
- *	WDI_STATUS_SUCCESS - success or else failure status
+ *  WDI_STATUS_SUCCESS - success or else failure status
  */
 WDI_Status
 wdi_mdns_enable_offload_rsp
@@ -37102,7 +37184,7 @@ WDI_ProcessFatalEventLogsReq
  * @event_data: pointer to event data
  *
  * Return: WDI_Status
- *	WDI_STATUS_SUCCESS - success or else failure status
+ *  WDI_STATUS_SUCCESS - success or else failure status
  */
 WDI_Status
 wdi_dhcp_server_offload_req
@@ -37111,79 +37193,79 @@ wdi_dhcp_server_offload_req
     WDI_EventInfoType *event_data
 )
 {
-	wdi_set_dhcp_server_offload_t *wdi_dhcp_server_info;
-	wpt_uint8 *buff  = NULL;
-	wpt_uint16 data_offset = 0;
-	wpt_uint16 size = 0;
-	WDI_Status wdi_status;
-	hal_dhcp_srv_offload_req_msg_t dhcp_srv_offload_req;
-	wdi_dhcp_srv_offload_rsp_cb wdi_dhcp_srv_offload_rsp_callback;
+  wdi_set_dhcp_server_offload_t *wdi_dhcp_server_info;
+  wpt_uint8 *buff  = NULL;
+  wpt_uint16 data_offset = 0;
+  wpt_uint16 size = 0;
+  WDI_Status wdi_status;
+  hal_dhcp_srv_offload_req_msg_t dhcp_srv_offload_req;
+  wdi_dhcp_srv_offload_rsp_cb wdi_dhcp_srv_offload_rsp_callback;
 
-	VOS_TRACE(VOS_MODULE_ID_WDI, VOS_TRACE_LEVEL_INFO,
-		  "%s: %d Enter",__func__, __LINE__);
+  VOS_TRACE(VOS_MODULE_ID_WDI, VOS_TRACE_LEVEL_INFO,
+      "%s: %d Enter",__func__, __LINE__);
 
-	/*------------------------------------------------------------------
-	  Sanity check
-	  ------------------------------------------------------------------*/
-	if ((NULL == wdi_ctx) || (NULL == event_data) ||
-	    (NULL == event_data->pEventData))
-	{
-		WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_WARN,
-			   "%s: Invalid parameters", __func__);
-		WDI_ASSERT(0);
-		return WDI_STATUS_E_FAILURE;
-	}
+  /*------------------------------------------------------------------
+    Sanity check
+    ------------------------------------------------------------------*/
+  if ((NULL == wdi_ctx) || (NULL == event_data) ||
+      (NULL == event_data->pEventData))
+  {
+    WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_WARN,
+         "%s: Invalid parameters", __func__);
+    WDI_ASSERT(0);
+    return WDI_STATUS_E_FAILURE;
+  }
 
-	wdi_dhcp_server_info = (wdi_set_dhcp_server_offload_t *)
-		event_data->pEventData;
+  wdi_dhcp_server_info = (wdi_set_dhcp_server_offload_t *)
+    event_data->pEventData;
 
-	/*-------------------------------------------------------------------
-	  Get message buffer
-	  -----------------------------------------------------------------*/
-	if (( WDI_STATUS_SUCCESS !=
-	      WDI_GetMessageBuffer(wdi_ctx,
-				   WDI_DHCP_SERVER_OFFLOAD_REQ,
-				   sizeof(dhcp_srv_offload_req.
-					  dhcp_srv_offload_req_params),
-				   &buff, &data_offset, &size))||
-	    (size < (data_offset +
-		     sizeof(dhcp_srv_offload_req.dhcp_srv_offload_req_params))))
-	{
-		WPAL_TRACE(eWLAN_MODULE_DAL_CTRL,  eWLAN_PAL_TRACE_LEVEL_FATAL,
-			   "Unable to get send buffer in GetFrameLog Req");
-		WDI_ASSERT(0);
-		return WDI_STATUS_E_FAILURE;
-	}
+  /*-------------------------------------------------------------------
+    Get message buffer
+    -----------------------------------------------------------------*/
+  if (( WDI_STATUS_SUCCESS !=
+        WDI_GetMessageBuffer(wdi_ctx,
+           WDI_DHCP_SERVER_OFFLOAD_REQ,
+           sizeof(dhcp_srv_offload_req.
+            dhcp_srv_offload_req_params),
+           &buff, &data_offset, &size))||
+      (size < (data_offset +
+         sizeof(dhcp_srv_offload_req.dhcp_srv_offload_req_params))))
+  {
+    WPAL_TRACE(eWLAN_MODULE_DAL_CTRL,  eWLAN_PAL_TRACE_LEVEL_FATAL,
+         "Unable to get send buffer in GetFrameLog Req");
+    WDI_ASSERT(0);
+    return WDI_STATUS_E_FAILURE;
+  }
 
-	dhcp_srv_offload_req.dhcp_srv_offload_req_params.bss_idx =
-		wdi_dhcp_server_info->bssidx;
-	dhcp_srv_offload_req.dhcp_srv_offload_req_params.enable =
-		wdi_dhcp_server_info->enable;
-	dhcp_srv_offload_req.dhcp_srv_offload_req_params.srv_ipv4 =
-		wdi_dhcp_server_info->srv_ipv4;
-	dhcp_srv_offload_req.dhcp_srv_offload_req_params.start_lsb =
-		wdi_dhcp_server_info->start_lsb;
-	dhcp_srv_offload_req.dhcp_srv_offload_req_params.num_client =
-		wdi_dhcp_server_info->num_client;
+  dhcp_srv_offload_req.dhcp_srv_offload_req_params.bss_idx =
+    wdi_dhcp_server_info->bssidx;
+  dhcp_srv_offload_req.dhcp_srv_offload_req_params.enable =
+    wdi_dhcp_server_info->enable;
+  dhcp_srv_offload_req.dhcp_srv_offload_req_params.srv_ipv4 =
+    wdi_dhcp_server_info->srv_ipv4;
+  dhcp_srv_offload_req.dhcp_srv_offload_req_params.start_lsb =
+    wdi_dhcp_server_info->start_lsb;
+  dhcp_srv_offload_req.dhcp_srv_offload_req_params.num_client =
+    wdi_dhcp_server_info->num_client;
 
-	wdi_dhcp_srv_offload_rsp_callback = (wdi_dhcp_srv_offload_rsp_cb)
-		event_data->pCBfnc;
+  wdi_dhcp_srv_offload_rsp_callback = (wdi_dhcp_srv_offload_rsp_cb)
+    event_data->pCBfnc;
 
-	wpalMemoryCopy(buff+data_offset,
-		       &dhcp_srv_offload_req.dhcp_srv_offload_req_params,
-		       sizeof(dhcp_srv_offload_req.
-			      dhcp_srv_offload_req_params));
+  wpalMemoryCopy(buff+data_offset,
+           &dhcp_srv_offload_req.dhcp_srv_offload_req_params,
+           sizeof(dhcp_srv_offload_req.
+            dhcp_srv_offload_req_params));
 
-	/*-------------------------------------------------------------------
-	  Send Suspend Request to HAL
-	  -----------------------------------------------------------------*/
-	wdi_status = WDI_SendMsg(wdi_ctx, buff, size,
-				 wdi_dhcp_srv_offload_rsp_callback,
-				 event_data->pUserData,
-				 WDI_DHCP_SERVER_OFFLOAD_RSP);
-	VOS_TRACE(VOS_MODULE_ID_WDI, VOS_TRACE_LEVEL_INFO,
-		  "%s: %d Exit",__func__, __LINE__);
-	return wdi_status;
+  /*-------------------------------------------------------------------
+    Send Suspend Request to HAL
+    -----------------------------------------------------------------*/
+  wdi_status = WDI_SendMsg(wdi_ctx, buff, size,
+         wdi_dhcp_srv_offload_rsp_callback,
+         event_data->pUserData,
+         WDI_DHCP_SERVER_OFFLOAD_RSP);
+  VOS_TRACE(VOS_MODULE_ID_WDI, VOS_TRACE_LEVEL_INFO,
+      "%s: %d Exit",__func__, __LINE__);
+  return wdi_status;
 }
 #endif /* DHCP_SERVER_OFFLOAD */
 

@@ -2587,61 +2587,61 @@ handle_failure:
  * Return: None
  */
 void wda_dhcp_server_offload_rsp_callback(wdi_dhcp_server_offload_rsp_param_t*
-					  wdi_rsp,
-					  void* user_data)
+            wdi_rsp,
+            void* user_data)
 {
-	tWDA_ReqParams *wda_params = (tWDA_ReqParams *)user_data;
-	sir_dhcp_srv_offload_info_t *dhcp_srv_offload_info;
-	VOS_STATUS status;
+  tWDA_ReqParams *wda_params = (tWDA_ReqParams *)user_data;
+  sir_dhcp_srv_offload_info_t *dhcp_srv_offload_info;
+  VOS_STATUS status;
 
-	VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-		   "<------ %s " ,__func__);
+  VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
+       "<------ %s " ,__func__);
 
-	if(NULL == wda_params)
-	{
-		VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-			  "%s: pWdaParams received NULL", __func__);
-		VOS_ASSERT(0);
-		return;
-	}
+  if(NULL == wda_params)
+  {
+    VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
+        "%s: pWdaParams received NULL", __func__);
+    VOS_ASSERT(0);
+    return;
+  }
 
-	if(NULL == wda_params->wdaMsgParam)
-	{
-		VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-			  "%s: pWdaParams->wdaMsgParam is NULL", __func__);
-		VOS_ASSERT(0);
-		vos_mem_free(wda_params->wdaWdiApiMsgParam);
-		vos_mem_free(wda_params);
-		return;
-	}
+  if(NULL == wda_params->wdaMsgParam)
+  {
+    VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
+        "%s: pWdaParams->wdaMsgParam is NULL", __func__);
+    VOS_ASSERT(0);
+    vos_mem_free(wda_params->wdaWdiApiMsgParam);
+    vos_mem_free(wda_params);
+    return;
+  }
 
-	dhcp_srv_offload_info = (sir_dhcp_srv_offload_info_t *)
-		wda_params->wdaMsgParam;
+  dhcp_srv_offload_info = (sir_dhcp_srv_offload_info_t *)
+    wda_params->wdaMsgParam;
 
-	if(dhcp_srv_offload_info->dhcp_offload_callback)
-	{
-	   dhcp_srv_offload_info->dhcp_offload_callback(
-				    dhcp_srv_offload_info->dhcp_server_offload_cb_context,
-				    CONVERT_WDI2VOS_STATUS(wdi_rsp->status));
-	}
-	else
-	{
-	   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-		   "%s: pFWLoggingInitParams callback is NULL", __func__);
-	}
+  if(dhcp_srv_offload_info->dhcp_offload_callback)
+  {
+     dhcp_srv_offload_info->dhcp_offload_callback(
+            dhcp_srv_offload_info->dhcp_server_offload_cb_context,
+            CONVERT_WDI2VOS_STATUS(wdi_rsp->status));
+  }
+  else
+  {
+     VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
+       "%s: pFWLoggingInitParams callback is NULL", __func__);
+  }
 
-	status = CONVERT_WDI2VOS_STATUS(wdi_rsp->status);
-	if (status)
-	{
-		VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-			  "%s: DHCP server offload failed with status=%d", __func__, status);
-		VOS_ASSERT(0);
-	}
+  status = CONVERT_WDI2VOS_STATUS(wdi_rsp->status);
+  if (status)
+  {
+    VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
+        "%s: DHCP server offload failed with status=%d", __func__, status);
+    VOS_ASSERT(0);
+  }
 
-	vos_mem_free(wda_params->wdaWdiApiMsgParam);
-	vos_mem_free(wda_params->wdaMsgParam);
-	vos_mem_free(wda_params);
-	return;
+  vos_mem_free(wda_params->wdaWdiApiMsgParam);
+  vos_mem_free(wda_params->wdaMsgParam);
+  vos_mem_free(wda_params);
+  return;
 }
 #endif /* DHCP_SERVER_OFFLOAD */
 
@@ -12061,6 +12061,27 @@ VOS_STATUS WDA_RemBeaconFilterReq(tWDA_CbContext *pWDA,
    return status;
 }
 
+VOS_STATUS WDA_set_qpower(tWDA_CbContext *pWDA,
+                 uint8_t enable)
+{
+    WDI_Status status;
+
+    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
+                   FL("---> %s"), __func__);
+    status = WDI_set_qpower(enable);
+    if (status == WDI_STATUS_PENDING)
+    {
+       VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
+                 FL("pending status received "));
+    }
+    else if (status != WDI_STATUS_SUCCESS)
+    {
+       VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
+               FL("Failure status %d"), status);
+    }
+    return CONVERT_WDI2VOS_STATUS(status);
+}
+
 VOS_STATUS WDA_set_vowifi_ind(tWDA_CbContext *pWDA,
                  tANI_BOOLEAN enable)
 {
@@ -16347,79 +16368,79 @@ VOS_STATUS WDA_ProcessGetARPStatsReq(tWDA_CbContext *pWDA,
  * @dhcp_server_offload_info: dhcp server offload info
  *
  * Return: status
- *	0 - success or else failure
+ *  0 - success or else failure
  */
 static int wda_process_dhcpserver_offload_req(tWDA_CbContext *wda_handle,
-					  sir_dhcp_srv_offload_info_t
-					  *dhcp_server_offload_info)
+            sir_dhcp_srv_offload_info_t
+            *dhcp_server_offload_info)
 {
-	wdi_set_dhcp_server_offload_t *dhcp_info;
-	tWDA_ReqParams *wda_params;
-	WDI_Status wstatus;
-	VOS_STATUS status = VOS_STATUS_SUCCESS;
+  wdi_set_dhcp_server_offload_t *dhcp_info;
+  tWDA_ReqParams *wda_params;
+  WDI_Status wstatus;
+  VOS_STATUS status = VOS_STATUS_SUCCESS;
 
-	VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-		  FL("---> %s"), __func__);
+  VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
+      FL("---> %s"), __func__);
 
-	if(NULL == dhcp_server_offload_info)
-	{
-		VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-			  "%s: dhcp_server_offload_info received NULL",
-			  __func__);
-		VOS_ASSERT(0) ;
-		return VOS_STATUS_E_FAULT;
-	}
+  if(NULL == dhcp_server_offload_info)
+  {
+    VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
+        "%s: dhcp_server_offload_info received NULL",
+        __func__);
+    VOS_ASSERT(0) ;
+    return VOS_STATUS_E_FAULT;
+  }
 
-	dhcp_info = (wdi_set_dhcp_server_offload_t *)
-		vos_mem_malloc(sizeof(*dhcp_info));
-	if (!dhcp_info) {
-		VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-			  "Failed to allocate buffer to send "
-			  "set_dhcp_server_offload cmd");
-		vos_mem_free(dhcp_server_offload_info);
-		return VOS_STATUS_E_NOMEM;
-	}
+  dhcp_info = (wdi_set_dhcp_server_offload_t *)
+    vos_mem_malloc(sizeof(*dhcp_info));
+  if (!dhcp_info) {
+    VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
+        "Failed to allocate buffer to send "
+        "set_dhcp_server_offload cmd");
+    vos_mem_free(dhcp_server_offload_info);
+    return VOS_STATUS_E_NOMEM;
+  }
 
-	vos_mem_zero(dhcp_info, sizeof(*dhcp_info));
+  vos_mem_zero(dhcp_info, sizeof(*dhcp_info));
 
-	wda_params = (tWDA_ReqParams *)vos_mem_malloc(sizeof(tWDA_ReqParams)) ;
-	if(NULL == wda_params)
-	{
-		VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-			  "%s: VOS MEM Alloc Failure", __func__);
-		VOS_ASSERT(0);
-		vos_mem_free(dhcp_info);
-		vos_mem_free(dhcp_server_offload_info);
-		return VOS_STATUS_E_NOMEM;
-	}
+  wda_params = (tWDA_ReqParams *)vos_mem_malloc(sizeof(tWDA_ReqParams)) ;
+  if(NULL == wda_params)
+  {
+    VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
+        "%s: VOS MEM Alloc Failure", __func__);
+    VOS_ASSERT(0);
+    vos_mem_free(dhcp_info);
+    vos_mem_free(dhcp_server_offload_info);
+    return VOS_STATUS_E_NOMEM;
+  }
 
-	dhcp_info->bssidx = dhcp_server_offload_info->bssidx;
-	dhcp_info->enable = dhcp_server_offload_info->dhcp_srv_offload_enabled;
-	dhcp_info->num_client = dhcp_server_offload_info->dhcp_client_num;
-	dhcp_info->srv_ipv4 = dhcp_server_offload_info->dhcp_srv_ip;
-	dhcp_info->start_lsb = dhcp_server_offload_info->start_lsb;
+  dhcp_info->bssidx = dhcp_server_offload_info->bssidx;
+  dhcp_info->enable = dhcp_server_offload_info->dhcp_srv_offload_enabled;
+  dhcp_info->num_client = dhcp_server_offload_info->dhcp_client_num;
+  dhcp_info->srv_ipv4 = dhcp_server_offload_info->dhcp_srv_ip;
+  dhcp_info->start_lsb = dhcp_server_offload_info->start_lsb;
 
-	wda_params->pWdaContext = wda_handle;
-	wda_params->wdaMsgParam = dhcp_server_offload_info;
-	wda_params->wdaWdiApiMsgParam = (void *)dhcp_info;
+  wda_params->pWdaContext = wda_handle;
+  wda_params->wdaMsgParam = dhcp_server_offload_info;
+  wda_params->wdaWdiApiMsgParam = (void *)dhcp_info;
 
-	wstatus = wdi_process_dhcpserver_offload_req(dhcp_info,
-					(wdi_dhcp_srv_offload_rsp_cb)
-					 wda_dhcp_server_offload_rsp_callback,
-					 wda_params);
-	if(IS_WDI_STATUS_FAILURE(wstatus))
-	{
-		VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-			   "Failed to send set_dhcp_server_offload cmd" );
-		status = CONVERT_WDI2VOS_STATUS(wstatus);
-		vos_mem_free(wda_params->wdaWdiApiMsgParam) ;
-		vos_mem_free(wda_params->wdaMsgParam);
-		vos_mem_free(wda_params);
-	}
+  wstatus = wdi_process_dhcpserver_offload_req(dhcp_info,
+          (wdi_dhcp_srv_offload_rsp_cb)
+           wda_dhcp_server_offload_rsp_callback,
+           wda_params);
+  if(IS_WDI_STATUS_FAILURE(wstatus))
+  {
+    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
+         "Failed to send set_dhcp_server_offload cmd" );
+    status = CONVERT_WDI2VOS_STATUS(wstatus);
+    vos_mem_free(wda_params->wdaWdiApiMsgParam) ;
+    vos_mem_free(wda_params->wdaMsgParam);
+    vos_mem_free(wda_params);
+  }
 
-	VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-		  "Set dhcp server offload");
-	return status;
+  VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
+      "Set dhcp server offload");
+  return status;
 }
 #endif /* DHCP_SERVER_OFFLOAD */
 
@@ -17119,6 +17140,14 @@ VOS_STATUS WDA_McProcessMsg( v_CONTEXT_t pVosContext, vos_msg_t *pMsg )
                            "Handling msg type WDA_VOWIFI_MODE");
 
          WDA_set_vowifi_ind(pWDA, pMsg->bodyval);
+         break;
+      }
+
+      case WDA_QPOWER:
+      {
+         VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO_HIGH,
+                   "Handling msg type WDA_QPOWER");
+                   WDA_set_qpower(pWDA, pMsg->bodyval);
          break;
       }
 
@@ -18306,7 +18335,7 @@ void WDA_lowLevelIndCallback(WDI_LowLevelIndType *wdiLowLevelInd,
                      wdiLowLevelInd->wdiIndicationData.wdiTXFailInd.macAddr,
                      wdiLowLevelInd->wdiIndicationData.wdiTXFailInd.seqNo);
          }
-	 break;
+   break;
       }
 #endif /* WLAN_FEATURE_RMC */
   
@@ -22961,8 +22990,8 @@ void WDA_MonModeRspCallback(void *pEventData, void* pUserData)
       return ;
    }
    pData = (tSirMonModeReq *)pWdaParams->wdaMsgParam;
-   if (pData != NULL) {
-        pData->callback(pData->magic, pData->cmpVar);
+   if (pData != NULL && pData->callback != NULL) {
+        pData->callback(pData->context);
         vos_mem_free(pWdaParams->wdaMsgParam);
    }
    vos_mem_free(pWdaParams) ;
